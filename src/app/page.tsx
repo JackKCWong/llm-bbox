@@ -21,7 +21,7 @@ interface Message {
 const SYSTEM_PROMPT = `You are an expert at identifying objects in images and providing precise bounding boxes.
 When given an image and a query about objects in it, analyze the image carefully and return bounding boxes for the requested objects.
 
-Always respond with valid JSON containing 'thinking' (string describing your analysis) and 'bbox' (array of 4 integers [x, y, width, height] in pixels 0-1000 relative to a 1000x1000 image).
+Always respond with valid JSON containing 'thinking' (string describing your analysis) and 'bbox' (array of 4 integers [x, y, width, height] in raw pixels).
 
 Example response format:
 {"thinking": "I found a person in the left portion of the image.", "bbox": [100, 200, 150, 400]}`;

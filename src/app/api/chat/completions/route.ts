@@ -5,7 +5,7 @@ import { z } from "zod";
 
 const BBoxSchema = z.object({
   thinking: z.string().describe("Analysis reasoning"),
-  bbox: z.array(z.number().int().min(0)).length(4).describe("Bounding box [x, y, width, height] in raw pixels"),
+  bbox: z.array(z.number().min(0)).length(4).describe("Bounding box [x, y, width, height] in raw pixels"),
 });
 
 export async function POST(request: NextRequest) {
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
 
     const client = Instructor({
       client: openai,
-      mode: "TOOLS",
+      mode: "MD",
     });
 
     const systemMessage = messages.find((m: { role: string }) => m.role === "system");
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
         { role: "user", content: userContent },
       ],
       response_model: { schema: BBoxSchema, name: "BBoxResponse" },
-      max_retries: 3,
+      max_retries: 5,
     });
 
     console.log("Response:", JSON.stringify(completion, null, 2));
