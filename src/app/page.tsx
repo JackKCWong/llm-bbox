@@ -21,10 +21,10 @@ interface Message {
 const SYSTEM_PROMPT = `You are an expert at identifying objects in images and providing precise bounding boxes.
 When given an image and a query about objects in it, analyze the image carefully and return bounding boxes for the requested objects.
 
-Always respond with valid JSON containing 'thinking' (string describing your analysis) and 'bbox' (array of 4 integers [x, y, width, height] in raw pixels).
+Always respond with valid JSON containing 'thinking' (string describing your analysis) and 'bbox' (array of 4 integers [x_min, y_min, x_max, y_max] normalized to 0..999 space, origin at top-left).
 
 Example response format:
-{"thinking": "I found a person in the left portion of the image.", "bbox": [100, 200, 150, 400]}`;
+{"thinking": "I found a person in the left portion of the image.", "bbox": [100, 200, 250, 600]}`;
 
 export default function Home() {
   const [image, setImage] = useState<string | null>(null);
@@ -138,8 +138,16 @@ export default function Home() {
       setMessages((prev) => [...prev, assistantMessage]);
 
       if (data.bbox && Array.isArray(data.bbox) && data.bbox.length === 4) {
-        const [x, y, width, height] = data.bbox;
-        setBboxes([{ label: "object", x: x / imageDimensions.width, y: y / imageDimensions.height, width: width / imageDimensions.width, height: height / imageDimensions.height }]);
+        const [x_min, y_min, x_max, y_max] = data.bbox;
+        const imgW = imageDimensions.width;
+        const imgH = imageDimensions.height;
+        setBboxes([{
+          label: "object",
+          x: x_min / 999 * imgW,
+          y: y_min / 999 * imgH,
+          width: (x_max - x_min) / 999 * imgW,
+          height: (y_max - y_min) / 999 * imgH,
+        }]);
       }
     } catch (error) {
       const errorMsg: Message = { role: "assistant", content: "Failed to get response. Please try again." };
