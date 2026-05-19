@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import Instructor from "@instructor-ai/instructor";
 import OpenAI from "openai";
-import { z } from "zod";
 
-const BBoxSchema = z.object({
-  thinking: z.string().describe("Analysis reasoning"),
-  bbox: z.array(z.number().min(0)).length(4).describe("Bounding box [x, y, width, height] in raw pixels"),
-});
+const BBoxSchema = {
+  thinking: "{think}",
+  bbox: "[x, y, width, height]",
+};
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,42 +31,71 @@ export async function POST(request: NextRequest) {
       baseURL: baseUrl,
     });
 
-    const client = Instructor({
-      client: openai,
-      mode: "FUNCTIONS"
-    });
-
     const systemMessage = messages.find((m: { role: string }) => m.role === "system");
     const userMessages = messages.filter((m: { role: string }) => m.role === "user");
     const lastUserMessage = userMessages.length > 0 ? userMessages[userMessages.length - 1].content : "";
 
-    let userContent: OpenAI.Chat.ChatCompletionContentPart[];
-    
+    let userContent: OpenAI.Responses.ResponseInputItem[];
+
     if (imageBase64) {
       userContent = [
-        { type: "text", text: `${lastUserMessage}\n\nImage dimensions: ${imageWidth || "unknown"}x${imageHeight || "unknown"} pixels. Return bbox in raw pixels based on these dimensions.` },
-        { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}`, detail: "low" } },
+        {
+          type: "input_image",
+          image_url: `data:image/jpeg;base64,${imageBase64}`,
+        },
+        {
+          type: "input_text",
+          text: `${lastUserMessage}\n\nImage dimensions: ${imageWidth || "unknown"}x${imageHeight || "unknown"} pixels. Return bbox in raw pixels based on these dimensions.`,
+        },
       ];
     } else {
-      userContent = [{ type: "text", text: lastUserMessage }];
+      userContent = [{ type: "input_text", text: lastUserMessage }];
     }
 
-    const completion = await client.chat.completions.create({
+    const response = await openai.responses.create({
       model: openaiModel,
-      messages: [
-        { role: "system", content: (systemMessage?.content || "") + "\n\nIMPORTANT: Always respond with JSON." },
-        { role: "user", content: userContent },
+      input: [
+        {
+          role: "developer",
+          content: (systemMessage?.content || "") + "\n\nIMPORTANT: Always respond with JSON in the format: {\"thinking\": \"...\", \"bbox\": [x, y, width, height]}.",
+        },
+        {
+          role: "user",
+          content: userContent,
+        },
       ],
-      response_model: { schema: BBoxSchema, name: "BBoxResponse" },
-      max_retries: 5,
+      text: {
+        format: {
+          type: "json_object",
+          value: BBoxSchema,
+        },
+      },
+      reasoning: {
+        type: "thinking",
+        title: "Analysis",
+        description: "Analysis reasoning for bbox detection",
+      },
     });
 
-    console.log("Response:", JSON.stringify(completion, null, 2));
+    console.log("Response:", JSON.stringify(response, null, 2));
 
+    let parsed = { thinking: "", bbox: [] as number[] };
+    for (const item of response.output) {
+      if (item.type === "reasoning") {
+        parsed.thinking = item.raw;
+      } else if (item.type === "message" && item.content) {
+        for (const content of item.content) {
+          if (content.type === "output_text") {
+            const text = content.text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+            parsed = JSON.parse(text);
+          }
+        }
+      }
+    }
     return NextResponse.json({
-      thinking: completion.thinking,
-      bbox: completion.bbox,
-      text: completion.thinking,
+      thinking: parsed.thinking,
+      bbox: parsed.bbox,
+      text: parsed.thinking,
     });
   } catch (error) {
     console.error("Chat completions error:", error);
