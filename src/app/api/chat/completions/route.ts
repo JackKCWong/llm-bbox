@@ -75,9 +75,9 @@ export async function POST(request: NextRequest) {
         title: "Analysis",
         description: "Analysis reasoning for bbox detection",
       },
-      tools: {
-        code_interpreter: {},
-      },
+      tools: [
+          { type: "code_interpreter" },
+        ],
     });
 
     console.log("Response:", JSON.stringify(response, null, 2));
