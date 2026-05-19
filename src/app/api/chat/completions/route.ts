@@ -74,6 +74,7 @@ export async function POST(request: NextRequest) {
         type: "thinking",
         title: "Analysis",
         description: "Analysis reasoning for bbox detection",
+        enable: true,
       },
       tools: [
           { type: "code_interpreter" },
