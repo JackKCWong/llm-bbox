@@ -3,7 +3,7 @@ import OpenAI from "openai";
 
 const BBoxSchema = {
   thinking: "{think}",
-  bbox: "[x, y, width, height]",
+  bbox: "[x_min, y_min, x_max, y_max] in 0..999 coordinate space, origin top-left",
 };
 
 export async function POST(request: NextRequest) {
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
         },
         {
           type: "input_text",
-          text: `${lastUserMessage}\n\nImage dimensions: ${imageWidth || "unknown"}x${imageHeight || "unknown"} pixels. Return bbox in raw pixels based on these dimensions.`,
+          text: `${lastUserMessage}\n\nImage dimensions: ${imageWidth || "unknown"}x${imageHeight || "unknown"} pixels. Normalize all bbox coordinates to 0..999 space (origin top-left) based on these dimensions.`,
         },
       ];
     } else {
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       input: [
         {
           role: "developer",
-          content: (systemMessage?.content || "") + "\n\nIMPORTANT: You have access to a code interpreter tool. BEFORE responding with the final bbox, you MUST use the code interpreter to verify your bbox coordinates by:\n1. Loading the image\n2. Drawing a rectangle with the proposed bbox coordinates\n3. Checking if the rectangle correctly surrounds the target text\n4. Adjusting coordinates if needed\n\nOnly after verification should you respond with the JSON format: {\"thinking\": \"...\", \"bbox\": [x, y, width, height]}.",
+          content: (systemMessage?.content || "") + "\n\nIMPORTANT: You have access to a code interpreter tool. BEFORE responding with the final bbox, you MUST use the code interpreter to verify your bbox coordinates by:\n1. Loading the image\n2. Drawing a rectangle with the proposed bbox coordinates\n3. Checking if the rectangle correctly surrounds the target text\n4. Adjusting coordinates if needed\n\nOnly after verification should you respond with the JSON format: {\"thinking\": \"...\", \"bbox\": [x_min, y_min, x_max, y_max]} where coordinates are in 0..999 space with origin at top-left.",
         },
         {
           role: "user",
