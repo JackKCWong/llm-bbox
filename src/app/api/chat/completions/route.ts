@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       input: [
         {
           role: "developer",
-          content: (systemMessage?.content || "") + "\n\nIMPORTANT: Always respond with JSON in the format: {\"thinking\": \"...\", \"bbox\": [x, y, width, height]}.",
+          content: (systemMessage?.content || "") + "\n\nIMPORTANT: You have access to a code interpreter tool. BEFORE responding with the final bbox, you MUST use the code interpreter to verify your bbox coordinates by:\n1. Loading the image\n2. Drawing a rectangle with the proposed bbox coordinates\n3. Checking if the rectangle correctly surrounds the target text\n4. Adjusting coordinates if needed\n\nOnly after verification should you respond with the JSON format: {\"thinking\": \"...\", \"bbox\": [x, y, width, height]}.",
         },
         {
           role: "user",
@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
       tools: [
           { type: "code_interpreter" },
         ],
+      enable_thinking: true
     });
 
     console.log("Response:", JSON.stringify(response, null, 2));
