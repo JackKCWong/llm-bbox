@@ -141,6 +141,7 @@ export default function Home() {
         const [x_min, y_min, x_max, y_max] = data.bbox;
         const imgW = imageDimensions.width;
         const imgH = imageDimensions.height;
+        console.log("BBox received:", data.bbox, "Image dims:", imgW, imgH);
         setBboxes([{
           label: "object",
           x: x_min / 999 * imgW,
