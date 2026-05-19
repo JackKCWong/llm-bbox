@@ -136,6 +136,11 @@
   }
 }
 
+.coords {
+  font-family: var(--font-geist-mono), monospace;
+  color: var(--accent);
+}
+
 .imageInfo {
   display: flex;
   align-items: center;

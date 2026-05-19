@@ -35,6 +35,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [bboxes, setBboxes] = useState<BBox[]>([]);
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -82,6 +83,15 @@ export default function Home() {
     if (img) {
       setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
     }
+  }, []);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLImageElement>) => {
+    const img = imageRef.current;
+    if (!img) return;
+    const rect = img.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width * img.naturalWidth;
+    const y = (e.clientY - rect.top) / rect.height * img.naturalHeight;
+    setMousePos({ x, y });
   }, []);
 
   const handleSubmit = async () => {
@@ -188,6 +198,8 @@ export default function Home() {
                 alt="Preview"
                 className={styles.previewImage}
                 onLoad={handleImageLoad}
+                onMouseMove={handleMouseMove}
+                onMouseLeave={() => setMousePos({ x: 0, y: 0 })}
               />
               {bboxes.map((bbox, index) => (
                 <div
@@ -213,6 +225,9 @@ export default function Home() {
             {imageDimensions.width > 0 && (
               <span>{imageDimensions.width} × {imageDimensions.height}</span>
             )}
+            <span className={styles.coords}>
+              {Math.round(mousePos.x)}, {Math.round(mousePos.y)}
+            </span>
             <button className={styles.clearBtn} onClick={() => { setImage(null); setBboxes([]); setMessages([]); }}>
               Clear
             </button>

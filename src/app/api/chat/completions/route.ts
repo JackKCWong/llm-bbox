@@ -35,7 +35,6 @@ export async function POST(request: NextRequest) {
 
     const client = Instructor({
       client: openai,
-      mode: "MD",
     });
 
     const systemMessage = messages.find((m: { role: string }) => m.role === "system");
