@@ -1,22 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import Instructor from "@instructor-ai/instructor";
+import OpenAI from "openai";
+import { z } from "zod";
 
-interface BBox {
-  label: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-interface ChatMessage {
-  role: "system" | "user" | "assistant";
-  content: string;
-}
+const BBoxSchema = z.object({
+  thinking: z.string().describe("Analysis reasoning"),
+  bbox: z.array(z.number().int().min(0)).length(4).describe("Bounding box [x, y, width, height] in raw pixels"),
+});
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { messages, imageBase64 } = body;
+    const { messages, imageBase64, imageWidth, imageHeight } = body;
 
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: "Invalid messages format" }, { status: 400 });
@@ -33,99 +28,47 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const chatMessages: ChatMessage[] = [];
-
-    messages.forEach((msg: ChatMessage) => {
-      if (msg.role === "system") {
-        chatMessages.push({
-          role: "system",
-          content: msg.content + "\n\nIMPORTANT: Always respond with valid JSON containing 'bboxes' array and 'text' field.",
-        });
-      } else {
-        chatMessages.push({
-          role: msg.role,
-          content: msg.content,
-        });
-      }
+    const openai = new OpenAI({
+      apiKey: openaiApiKey,
+      baseURL: baseUrl,
     });
 
-    const imageContent = imageBase64
-      ? [
-          {
-            type: "image_url",
-            image_url: {
-              url: `data:image/jpeg;base64,${imageBase64}`,
-              detail: "low",
-            },
-          },
-        ]
-      : [];
+    const client = Instructor({
+      client: openai,
+      mode: "TOOLS",
+    });
 
-    const hasImage = imageBase64 && imageContent.length > 0;
+    const systemMessage = messages.find((m: { role: string }) => m.role === "system");
+    const userMessages = messages.filter((m: { role: string }) => m.role === "user");
+    const lastUserMessage = userMessages.length > 0 ? userMessages[userMessages.length - 1].content : "";
 
-    const requestBody: Record<string, unknown> = {
+    let userContent: OpenAI.Chat.ChatCompletionContentPart[];
+    
+    if (imageBase64) {
+      userContent = [
+        { type: "text", text: `${lastUserMessage}\n\nImage dimensions: ${imageWidth || "unknown"}x${imageHeight || "unknown"} pixels. Return bbox in raw pixels based on these dimensions.` },
+        { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}`, detail: "low" } },
+      ];
+    } else {
+      userContent = [{ type: "text", text: lastUserMessage }];
+    }
+
+    const completion = await client.chat.completions.create({
       model: openaiModel,
-      messages: chatMessages.map((m) => {
-        if (hasImage && m.role === "user") {
-          return {
-            role: m.role,
-            content: [
-              {
-                type: "text",
-                text: m.content,
-              },
-              ...imageContent,
-            ],
-          };
-        }
-        return m;
-      }),
-    };
-
-const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${openaiApiKey}`,
-      },
-      body: JSON.stringify(requestBody),
+      messages: [
+        { role: "system", content: (systemMessage?.content || "") + "\n\nIMPORTANT: Always respond with JSON." },
+        { role: "user", content: userContent },
+      ],
+      response_model: { schema: BBoxSchema, name: "BBoxResponse" },
+      max_retries: 3,
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error("API error:", response.status, errorData);
-      const errorText = await response.text().catch(() => "");
-      console.error("Raw error response:", errorText);
-      return NextResponse.json(
-        { error: `API error: ${response.status}` },
-        { status: response.status }
-      );
-    }
-
-    const data = await response.json();
-    console.log("Response:", JSON.stringify(data, null, 2));
-    const assistantMessage = data.choices?.[0]?.message?.content;
-
-    if (!assistantMessage) {
-      return NextResponse.json({ error: "No response from model" }, { status: 500 });
-    }
-
-    let parsed: { bboxes?: BBox[]; text?: string } = {};
-    try {
-      const jsonMatch = assistantMessage.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        parsed = JSON.parse(jsonMatch[0]);
-      }
-    } catch {
-      return NextResponse.json({
-        text: assistantMessage,
-        bboxes: [],
-      });
-    }
+    console.log("Response:", JSON.stringify(completion, null, 2));
 
     return NextResponse.json({
-      text: parsed.text || assistantMessage,
-      bboxes: parsed.bboxes || [],
+      thinking: completion.thinking,
+      bbox: completion.bbox,
+      text: completion.thinking,
     });
   } catch (error) {
     console.error("Chat completions error:", error);

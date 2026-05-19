@@ -14,28 +14,17 @@ interface BBox {
 interface Message {
   role: "user" | "assistant";
   content: string;
-  bboxes?: BBox[];
+  thinking?: string;
+  bbox?: number[];
 }
 
 const SYSTEM_PROMPT = `You are an expert at identifying objects in images and providing precise bounding boxes.
 When given an image and a query about objects in it, analyze the image carefully and return bounding boxes for the requested objects.
 
-Return your response in JSON format with a "bboxes" array containing objects with:
-- "label": a descriptive name for the object
-- "x": normalized x position (0-1, relative to image width)
-- "y": normalized y position (0-1, relative to image height)
-- "width": normalized width (0-1, relative to image width)
-- "height": normalized height (0-1, relative to image height)
-
-Also include a "text" field explaining what you found.
+Always respond with valid JSON containing 'thinking' (string describing your analysis) and 'bbox' (array of 4 integers [x, y, width, height] in pixels 0-1000 relative to a 1000x1000 image).
 
 Example response format:
-{
-  "bboxes": [
-    {"label": "person", "x": 0.1, "y": 0.2, "width": 0.15, "height": 0.4}
-  ],
-  "text": "I found a person standing in the left portion of the image."
-}`;
+{"thinking": "I found a person in the left portion of the image.", "bbox": [100, 200, 150, 400]}`;
 
 export default function Home() {
   const [image, setImage] = useState<string | null>(null);
@@ -117,6 +106,8 @@ export default function Home() {
         body: JSON.stringify({
           messages: messageHistory,
           imageBase64: image ? image.split(",")[1] : undefined,
+          imageWidth: imageDimensions.width,
+          imageHeight: imageDimensions.height,
         }),
       });
 
@@ -130,13 +121,15 @@ export default function Home() {
 
       const assistantMessage: Message = {
         role: "assistant",
-        content: data.text || "I've analyzed the image.",
-        bboxes: data.bboxes || [],
+        content: data.thinking || data.text || "I've analyzed the image.",
+        thinking: data.thinking,
+        bbox: data.bbox,
       };
       setMessages((prev) => [...prev, assistantMessage]);
 
-      if (data.bboxes && data.bboxes.length > 0) {
-        setBboxes(data.bboxes);
+      if (data.bbox && Array.isArray(data.bbox) && data.bbox.length === 4) {
+        const [x, y, width, height] = data.bbox;
+        setBboxes([{ label: "object", x: x / imageDimensions.width, y: y / imageDimensions.height, width: width / imageDimensions.width, height: height / imageDimensions.height }]);
       }
     } catch (error) {
       const errorMsg: Message = { role: "assistant", content: "Failed to get response. Please try again." };
