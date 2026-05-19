@@ -86,17 +86,38 @@ export async function POST(request: NextRequest) {
 
     let parsed = { thinking: "", bbox: [] as number[] };
     for (const item of response.output) {
+      console.log("Output item type:", item.type);
       if (item.type === "reasoning") {
         parsed.thinking = item.raw;
       } else if (item.type === "message" && item.content) {
         for (const content of item.content) {
+          console.log("Content type:", content.type, "text:", content.text);
           if (content.type === "output_text") {
             const text = content.text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+            console.log("Parsed text:", text);
             parsed = JSON.parse(text);
+          }
+        }
+      } else if (item.type === "tool_call") {
+        for (const call of item.tool_call) {
+          console.log("Tool call:", call.name, call.arguments);
+          if (call.name === "code_interpreter" && call.output) {
+            try {
+              const output = JSON.parse(call.output);
+              if (output.bbox) {
+                parsed.bbox = output.bbox;
+              }
+              if (output.thinking) {
+                parsed.thinking = output.thinking;
+              }
+            } catch {
+              console.log("Could not parse tool output as JSON");
+            }
           }
         }
       }
     }
+    console.log("Final parsed:", parsed);
     return NextResponse.json({
       thinking: parsed.thinking,
       bbox: parsed.bbox,
